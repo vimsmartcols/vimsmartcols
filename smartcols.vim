@@ -32,7 +32,7 @@
 "
 " Normal mode:  >           pushes right to match column in row above
 "               <           pushes left to match column in row above
-"               |           attempts to align all rows to match row above
+"               |           attempts to align all columns to match row above
 " Insert mode:  Shift-TAB   pushes right to match column in row above
 "
 "---------------------------------------
