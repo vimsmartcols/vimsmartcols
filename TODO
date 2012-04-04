@@ -1,0 +1,16 @@
+vimsmartcols
+
+1. Visual mode: select a block of text, then attempt to make
+   all rows in the block match columns in a reasonable way.
+
+2. Allow numerical modifiers. For example, 4| would mean
+   "auto-align me with the row four rows above me." +3> would mean
+   "shift right to next column 3 rows below me."
+
+3. Optional, smart autocmd feature. Auto-aligns columns of rows
+   above and below you as you edit this one, if they're aligned.
+
+4. In general, smarter detection of what are columns and which ones
+   match up, possibly using repeated characters like ',' or '='.
+
+

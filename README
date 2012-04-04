@@ -1,0 +1,71 @@
+" vimsmartcols
+"
+" vim global plugin for smart columns
+" 
+" v0.09
+"
+" Bo Waggoner
+" vimsmartcols@gmail.com
+" https://github.com/vimsmartcols/vimsmartcols
+" Modified: 2012-04-04
+" 
+" This software is free.
+"
+" --------------------------------------
+
+" Install:
+" 1. put this file in directory ~/.vim/plugins
+"    (creating it if necessary), or whatever plugin folder.
+" 2. If desired, move these keymappings from smartcols.vim
+"    to your .vimrc and/or change them.
+
+:nmap > :call Shiftcolright()<CR>
+:nmap < :call Shiftcolleft()<CR>
+:nmap \| :call Aligncol()<CR>
+:imap <S-Tab> <C-R>=Tabcolright()<CR>
+
+
+"---------------------------------------
+"
+" TLDR:
+" anything separated by two spaces or more is a "column"
+"
+" Normal mode:  >           pushes right to match column in row above
+"               <           pushes left to match column in row above
+"               |           attempts to align all rows to match row above
+" Insert mode:  Shift-TAB   pushes right to match column in row above
+"
+"---------------------------------------
+ 
+" Examples:
+"
+" >> Start with the following lines: we're in the middle of adding
+" >> a second row.
+"
+" x = {  7,      8,      9,     10,     11,
+"  12,  13,  14,  15,
+"
+" >> Move cursor to the 12 and press '>' to align 12 with next column.
+"
+" x = {  7,      8,      9,     10,     11,
+"        12,  13,  14,  15,
+"
+" >> Go to end of line and press 'a' to enter insert mode.
+" >> Press Shift-TAB twice to move to last column and type '16};'.
+" 
+" x = {  7,      8,      9,     10,     11,
+"        12,  13,  14,  15,             16};
+"
+" >> Press ESC to exit insert mode, press 'b' to move to the beginning of
+" 16, and press '<' to align it with the previous column.
+"
+" x = {  7,      8,      9,     10,     11,
+"        12,  13,  14,  15,     16};
+"
+" >> Press '|' to auto-align all columns.
+"
+" x = {  7,      8,      9,     10,     11,
+"        12,     13,     14,    15,     16};
+"
+"     
+
