@@ -2,12 +2,12 @@
 "
 " vim global plugin for smart columns
 " 
-" v0.09
+" v0.19
 "
 " Bo Waggoner
 " vimsmartcols@gmail.com
 " https://github.com/vimsmartcols/vimsmartcols
-" Modified: 2012-04-04
+" Modified: 2012-06-17
 " 
 " This software is free.
 "
@@ -16,59 +16,176 @@
 " Install:
 " 1. put this file in directory ~/.vim/plugins
 "    (creating it if necessary), or whichever plugin folder.
-" 2. If desired, move these keymappings from smartcols.vim
-"    to your .vimrc and/or change them.
+" 2. Change the following settings and keymappings to suit
+"    your preference, if you want.
 
-:nmap > :call Shiftcolright()<CR>
-:nmap < :call Shiftcolleft()<CR>
-:nmap \| :call Aligncol()<CR>
-:imap <S-Tab> <C-R>=Tabcolright()<CR>
+" the minimum number of spaces separating columns
+let g:smartcolsep = 2
+
+" when aligning, allow skipping this many rows (like commented or blank rows)
+let g:smartcolskip = 1
+
+
+:nmap <C-l>      :call Movecol(1)<CR>
+:nmap <C-h>      :call Movecol(-1)<CR>
+:nmap <S-l>      :call Indentcol(1)<CR>
+:nmap <S-h>      :call Indentcol(-1)<CR>
+:nmap <TAB>      :call Indentcol(&tabstop)<CR>
+:nmap <S-TAB>    :call Indentcol(-&tabstop)<CR>
+:nmap >          :call Matchcol(1)<CR>
+:nmap <          :call Matchcol(-1)<CR>
+
+:imap <S-TAB>    <C-R>=Matchcol(1)<CR>
 
 
 "---------------------------------------
 "
-" TLDR:
-" anything separated by two spaces or more is a "column"
+" Summary
+" Anything separated by g:smartcolsep spaces or more is a 'column'.
+" Columns span vertically as many lines as they are continued unbroken,
+" subject to the following:
+"   -- a column can skip over at most g:smartcolskip lines total.
+"   -- not included in the above, the function Canskirow() details when
+"      a row may be skipped for free. (Example: comment lines in C/C++.)
+"   -- overriding the above, a column cannot span past an unskippable
+"      row as defined in Cannotskiprow(). (Example: { or } in C/C++).
 "
-" Normal mode:  >           pushes right to match column in row above
-"               <           pushes left to match column in row above
-"               |           attempts to align all columns to match row above
-" Insert mode:  Shift-TAB   pushes right to match column in row above
+" Normal mode:  Ctrl-l      moves cursor one column to the right
+"               Ctrl-h      moves cursor one column to the left
+"               Shift-l     push entire column right
+"               Shift-h     push entire column left
+"               Tab         push entire column right one tabstop length
+"               Shift-Tab   push entire column left one tabstop length
+"               >           push current position right to match columns nearby
+"               <           push current position left to match columns nearby
+"
+" Insert mode:  Shift-Tab   pushes current position right to match columns nearby
 "
 "---------------------------------------
- 
-" Examples:
-"
-" >> Start with the following lines: we're in the middle of adding
-" >> a second row.
-"
-" x = {  7,      8,      9,     10,     11,
-"  12,  13,  14,  15,
-"
-" >> Move cursor to the 12 and press '>' to align 12 with next column.
-"
-" x = {  7,      8,      9,     10,     11,
-"        12,  13,  14,  15,
-"
-" >> Go to end of line and press 'a' to enter insert mode.
-" >> Press Shift-TAB twice to move to last column and type '16};'.
 " 
-" x = {  7,      8,      9,     10,     11,
-"        12,  13,  14,  15,             16};
+" Example (movement):
+"   let  x  =  17
+" Put cursor on beginning of line and press Ctrl-l. This moves one column to
+" the right.Now cursor is on 'l' in let. Press Ctrl-l again; now on 'x'.
+" Press Ctrl-h; now on 'l' again.
+" 
+" Example (pushing columns):
+"   let  x  =  17
+"   let  y  =  22
+" Put cursor on either '=' and press Shift-l. This pushes the entire column
+" right one space. Result:
+"   let  x   =  17
+"   let  y   =  22
+" Pressing Shift-h will push it back to the left.
 "
-" >> Press ESC to exit insert mode, press 'b' to move to the beginning of
-" 16, and press '<' to align it with the previous column.
+" Example (matching columns):
+"   let  x         =  17
+"   let y =  22
+" Put cursor on '=' in second line and press >. This pushs the equals sign
+" to the nearest surrounding column on the right. Result:
+"   let  x         =  17
+"   let y          =  22
+" 
+" Example (insert mode):
+"   let  x         = 17
+"   let  y
+" Put cursor on 'y' and press a to enter insert mode. Now press Shift-Tab;
+" this moves the cursor rightward to the nearest surrounding column. Type =.
+"   let  x         = 17
+"   let  y         =
 "
-" x = {  7,      8,      9,     10,     11,
-"        12,  13,  14,  15,     16};
-"
-" >> Press '|' to auto-align all columns.
-"
-" x = {  7,      8,      9,     10,     11,
-"        12,     13,     14,    15,     16};
-"
-"     
+"----------------------------------------
 
+
+" Move cursor 'direction' columns (positive is right, negative is left).
+" If asked to move to an extreme, goes to the first or last character.
+function Movecol(direction)
+    let l:mylinenum = line(".")
+    let l:myxpos    = col(".")-1
+    let l:mytext    = getline(l:mylinenum)
+    let l:mycols    = Getcols(l:mytext)
+    let l:currcol   = Getcurrentcol(l:myxpos,l:mycols)
+    let l:goalcol   = l:currcol + a:direction
+    " If moving left, and not already at leftmost position in col, count that as a move
+    if a:direction < 0 && l:mycols[l:currcol][0] < l:myxpos
+        let l:goalcol = l:goalcol + 1
+    endif
+    if l:goalcol < 0
+        let l:goalpos = 0
+    elseif l:goalcol >= len(l:mycols)
+        let l:goalpos = len(l:mytext) - 1
+    else
+        let l:goalpos = l:mycols[l:goalcol][0]
+    endif
+    call cursor(l:mylinenum,l:goalpos+1)
+endfunction
+
+" If 'direction' > 0: repeat operation 'IndentRight' 'direction' times.
+" 'IndentRight': find current column and all matching columns above and below;
+"                move them one space to the right.
+" Analogous if 'direction' < 0. But stop each row if you run into text on the left.
+function Indentcol(direction)
+    let l:dir       = a:direction
+    let l:mylinenum = line(".")
+    let l:myxpos    = col(".")-1
+    let l:finalxpos = l:myxpos
+    let l:currpos   = l:myxpos
+    if a:direction > 0
+        let l:dx = 1
+    elseif a:direction < 0
+        let l:dx = -1
+    else
+        return 0
+    endif
+    while l:dir != 0
+        let l:rows  = Getrowswithcol(l:mylinenum,l:currpos)
+        for l:r in l:rows
+            call Trytoindent(l:r,l:currpos,l:dx)
+        endfor
+        if l:finalxpos == l:currpos
+            " if indentation is successful, they will still be equal next
+            " loop; else, stop trying from now on
+            let l:result = Trytoindent(l:mylinenum,l:currpos,l:dx)
+            let l:finalxpos = l:finalxpos + l:result
+        endif
+        let l:currpos = l:currpos + l:dx
+        let l:dir = l:dir - l:dx
+    endwhile
+    call cursor(l:mylinenum,l:finalxpos+1)
+endfunction
+
+" If 'direction' > 0: repeat operation 'ShiftRight' 'direction' times.
+" 'ShiftRight': list all nearby columns, pick closest one that is on the right.
+"               (If none, give up.) Add spaces to move cursor to that x-position.
+" Analogous if 'direction' < 0.
+function Matchcol(direction)
+    let l:dir       = a:direction
+    let l:mylinenum = line(".")
+    let l:myxpos    = col(".")-1
+    if a:direction > 0
+        let l:dx = 1
+    elseif a:direction < 0
+        let l:dx = -1
+    else
+        return ""
+    endif
+    let l:nearcols = Getnearbycols(l:mylinenum,l:myxpos)
+    while l:dir != 0
+        let l:nextx = Getnextxpos(l:nearcols,l:myxpos,l:dx)
+        if l:nextx < 0
+            break
+        endif
+        let l:diff = l:nextx - l:myxpos
+        let l:result = Trytoindent(l:mylinenum,l:myxpos,l:diff)
+        let l:myxpos = l:myxpos + l:result
+        if l:result != l:diff
+            break   " unable to make full progress
+        endif
+        let l:dir = l:dir - l:dx
+    endwhile
+    call cursor(l:mylinenum,l:myxpos+1)
+    return ""
+endfunction
 
 
 
@@ -82,38 +199,31 @@
 " columns. Change this to change the definition of a column.
 " Return value should be a list of triples:
 " [[start,end,contents],[start,end,contents],...]
-function! Getcols(myline)
+function Getcols(myline)
     let mycols  = []
     let index   = 0
-    let colstartexpr = "\\s\\s\\S"
-    let colendexpr   = "\\S\\s\\s"
+    let colstartexpr = repeat("\\s",g:smartcolsep) . "\\S"
+    let colendexpr   = "\\S" . repeat("\\s",g:smartcolsep)
     
-    " if there's text at zero or one index, that's a column
-    if len(a:myline) > 0 && a:myline[0] != " "
-        call add(mycols,[0])
-        let index = match(a:myline,colendexpr,0)
-        if index < 0
-            call add(mycols[0],len(a:myline)-1)
-            call add(mycols[0],a:myline)
-            return mycols
-        else
-            call add(mycols[0],index)
-            call add(mycols[0],a:myline[ : index])
+    " first check indices 0, 1, ..., smartcolsep-1
+    let pos = 0
+    while pos < g:smartcolsep && pos < len(a:myline)
+        if a:myline[pos] != ' '
+            call add(mycols,[pos])
+            let index = match(a:myline,colendexpr,0)
+            if index < 0
+                call add(mycols[0],len(a:myline)-1)
+                call add(mycols[0],a:myline[pos : ])
+                return mycols
+            else
+                call add(mycols[0],index)
+                call add(mycols[0],a:myline[pos : index])
+            endif
+            break
         endif
-    elseif len(a:myline) > 1 && a:myline[1] != " "
-        call add(mycols,[1])
-        let index = match(a:myline,colendexpr,1)
-        if index < 0
-            call add(mycols[0],len(a:myline)-1)
-            call add(mycols[0],a:myline[1 : len(a:myline)-1])
-            return mycols
-        else
-            call add(mycols[0],index)
-            call add(mycols[0],a:myline[1 : index])
-            let index = index - 1
-        endif
-    endif
-
+        let pos = pos + 1
+    endwhile
+    
     " get all other columns
     while index >= 0
         let currcol = len(mycols)
@@ -135,232 +245,163 @@ function! Getcols(myline)
 endfunction
 
 
-
-" given current position and columns, get the start of the nearest col
-" Going right: return 'i' when between end of i-1 and end of i
-function! Getnearestrightcol(myxpos,mycols)
-    let index = 0
-    while index < len(a:mycols)
-        if a:myxpos <= a:mycols[index][1]
-            break
-        endif
-        let index = index+1
+" Return the current column we are in. Return -1 if to the left of all cols.
+function Getcurrentcol(xpos,mycols)
+    let l:answer = 0
+    " find first column that's strictly right of xpos
+    while l:answer < len(a:mycols) && a:mycols[l:answer][0] <= a:xpos
+        let l:answer = l:answer + 1
     endwhile
-    if index >= len(a:mycols)
-        let index = len(a:mycols)-1
-    endif
-    return index
+    return l:answer-1
 endfunction
 
 
-" given current position and columns, get the start of the nearest col
-" Going left: return 'i' when between start of i and start of i+1
-function! Getnearestleftcol(myxpos,mycols)
-    let index = 0 
-    if a:myxpos < a:mycols[0][0]
-        return -1
-    end
-    while index < len(a:mycols)-1
-        if a:myxpos < a:mycols[index+1][0]
-            break
+" Getnearbycols -- return an array of rows: result[i] = [rownumber, cols]
+"   where cols is the result of Getcols(getline(rownumber)).
+function Getnearbycols(linenum,xpos)
+    let l:rows = []
+    let l:tryrow = a:linenum - 1
+    let l:numskips = 0
+    while l:tryrow >= 1 && l:numskips <= g:smartcolskip && !Cannotskiprow(l:tryrow)
+        let l:cols = Getcols(getline(l:tryrow))
+        call add(l:rows,[l:tryrow,l:cols])
+        let l:currcol = Getcurrentcol(a:xpos,l:cols)
+        if l:currcol < 0 || l:cols[l:currcol][0] != a:xpos
+            if !Canskiprow(l:tryrow)
+                let l:numskips = l:numskips + 1
+            endif
         endif
-        let index = index+1
+        let l:tryrow = l:tryrow - 1
     endwhile
-    return index
+    let l:numskips = 0
+    let l:tryrow = a:linenum + 1
+    while l:tryrow <= line("$") && l:numskips <= g:smartcolskip && !Cannotskiprow(l:tryrow)
+        let l:cols = Getcols(getline(l:tryrow))
+        call add(l:rows,[l:tryrow,l:cols])
+        let l:currcol = Getcurrentcol(a:xpos,l:cols)
+        if l:currcol < 0 || l:cols[l:currcol][0] != a:xpos
+            if !Canskiprow(l:tryrow)
+                let l:numskips = l:numskips + 1
+            endif
+        endif
+        let l:tryrow = l:tryrow + 1
+    endwhile
+    return l:rows
 endfunction
 
 
-
-" Infer from context where to shift me to
-function! Getshiftrightpos(myxpos,mylinenum)
-    let myline = getline(a:mylinenum)
-    if a:mylinenum <= 1
-        return -1
-    endif
-    let prevline = getline(a:mylinenum - 1)
-    let prevcols = Getcols(prevline)
-    let goalcol = Getnearestleftcol(a:myxpos,prevcols)
-    if goalcol < 0 || goalcol >= len(prevcols)-1
-        return -1
-    endif
-    return prevcols[goalcol+1][0]
+" Getnextxpos -- given a list of rows, each with column info, find
+" the position of the next column in the given direction 
+function Getnextxpos(rowcols,xpos,dir)
+    let l:best = -1
+    for l:r in a:rowcols
+        for l:col in l:r[1]
+            if a:dir > 0
+                if l:col[0] > a:xpos
+                    if l:best == -1 || l:col[0] < l:best
+                        let l:best = l:col[0]
+                        break
+                    endif
+                endif
+            else
+                if l:col[0] < a:xpos
+                    if l:col[0] > l:best
+                        let l:best = l:col[0]
+                    endif
+                endif
+            endif
+        endfor
+    endfor
+    return l:best
 endfunction
 
-" Infer from context where to shift me to
-function! Getshiftleftpos(myxpos,mylinenum)
-    let myline = getline(a:mylinenum)
-    if a:mylinenum <= 1 || a:myxpos <= 0
-        return -1
-    endif
-    let prevline = getline(a:mylinenum - 1)
-    let prevcols = Getcols(prevline)
-    let goalcol = Getnearestleftcol(a:myxpos-1,prevcols)
-    if goalcol < 0
-        return -1
-    endif
-    let mycols = Getcols(myline)
-    let newpos = prevcols[goalcol][0]
-    let nexttomyleft = Getnearestrightcol(a:myxpos,mycols)
-    if nexttomyleft >= 1
-        let nexttomyleft = mycols[nexttomyleft-1][1]
-        if newpos < nexttomyleft+1
-            let newpos = nexttomyleft+1
+
+" Getrowswithcol -- get the nearby rows that have a column at xpos.
+function Getrowswithcol(linenum,xpos)
+    let l:rows = []
+    let l:rowcols = Getnearbycols(a:linenum,a:xpos)
+    for l:r in l:rowcols
+        let l:cols = l:r[1]
+        let l:mycol = Getcurrentcol(a:xpos,l:cols)
+        if l:mycol >= 0 && l:cols[l:mycol][0] == a:xpos
+            call add(l:rows,l:r[0])
+        endif
+    endfor
+    return l:rows
+endfunction
+
+
+" Cannotskiprow -- contains exceptions to allowable skips.
+function Cannotskiprow(row)
+    if &ft == "c" || &ft == "cpp"
+        if !empty(matchstr(getline(a:row),"{"))
+            return 1
+        elseif !empty(matchstr(getline(a:row),"}"))
+            return 1
         endif
     endif
-    return newpos
+    return 0
 endfunction
 
 
-" actually do the shifting
-function! Doshiftright(newxpos,oldxpos,mytext)
-    let mycols = Getcols(a:mytext)
-    let gap = a:newxpos - a:oldxpos
-    if a:oldxpos <= 0
-        return repeat(' ',gap) . a:mytext
-    else
-        return a:mytext[ : a:oldxpos-1] . repeat(' ',gap) . a:mytext[a:oldxpos : ]
-    endif
-endfunction
-
-" actually do the shifting
-function! Doshiftleft(newxpos,oldxpos,mytext)
-    let mycols = Getcols(a:mytext)
-    let setto = a:newxpos
-    if setto == 0
-        return a:mytext[a:oldxpos : ]
-    else
-        return a:mytext[ : setto-1] . a:mytext[a:oldxpos : ]
-    endif
-endfunction
-
-
-" try to match my row to the given column
-function! Trymatchto(mytext,matchcols)
-    let mycols = Getcols(a:mytext)
-    let ocols = a:matchcols
-    
-    " attempt to throw out irrelevent early items in matchcols
-    while len(ocols) >= 1 && ocols[1][0] <= mycols[0][0]
-        call remove(ocols,0)
-    endwhile
-
-    " if left column is in-between, move it right if they'll still line up
-    if len(ocols) == len(mycols)+1 && ocols[1][0] > mycols[0][0]
-        call remove(ocols,0)
-    endif
-    
-    " loop through and align them
-    let newtext = ""
-    let index = 0
-    let at = 0
-    while index < len(mycols) && index < len(ocols)
-        let gap = ocols[index][0] - at
-        if gap > 0
-            let newtext = newtext . repeat(' ',gap)
-            let at = at + gap
+" Canskiprow -- contains exceptions to the skipping rule; e.g.
+function Canskiprow(row)
+    if &ft == "c" || &ft == "cpp"
+        " If the line contains nothing or only a comment, we're allowed to skip it
+        let l:str = getline(a:row)
+        let l:ind = 0
+        while l:ind < len(l:str) && (l:str[l:ind] == " " || l:str[l:ind] == "\t")
+            let l:ind = l:ind+1
+        endwhile
+        if l:ind == len(l:str) || (l:ind+1 < len(l:str) && l:str[l:ind : l:ind+1] == "//")
+            return 1
         endif
-        let newtext = newtext . mycols[index][2]
-        let at = at + len(mycols[index][2])
-        let index = index + 1
-    endwhile
-    
-    " add back in anything left over
-    if index < len(mycols)
-        let newtext = newtext . a:mytext[mycols[index-1][1]+1 : ]
-    end
-
-    return newtext
+    endif
+    return 0
 endfunction
 
 
-
-" =============================================
-" Normal Mode Commands (column manipulation)
-" =============================================
-
-
-" normal mode, shift a column to the right: >
-" Shiftcolright
-function! Shiftcolright()
-    let mylinenum = line(".")
-    let myxpos    = col(".")-1
-    let mytext    = getline(mylinenum)
-    let mycols    = Getcols(mytext)
-    let mycolnum  = Getnearestrightcol(myxpos,mycols)     " move to start of column we're in
-    if mycolnum < 0
-        return
+" Trytoindent -- tries to add/remove spaces to a row at xpos
+" return number of spaces added (so if we remove 2, return -2).
+function Trytoindent(linenum,xpos,dir)
+    let l:text = getline(a:linenum)
+    if a:dir > 0
+        if a:xpos == 0
+            call setline(a:linenum,repeat(' ',a:dir) . l:text)
+        else
+            call setline(a:linenum,l:text[ : a:xpos-1] . repeat(' ',a:dir) . l:text[a:xpos : ])
+        endif
+        return a:dir
+    elseif a:dir < 0
+        let l:diff = 0
+        while a:xpos - l:diff > 0
+            if l:text[a:xpos-l:diff-1] != ' ' && l:text[a:xpos-l:diff-1] != '\t'
+                break
+            endif
+            let l:diff = l:diff + 1
+        endwhile
+        " after shifting, gap before us should be g:smartcolsep
+        let l:amount = -a:dir
+        if l:amount > a:xpos
+            let l:amount = a:xpos
+        endif
+        if l:diff < a:xpos
+            if l:amount > l:diff - g:smartcolsep
+                let l:amount = l:diff - g:smartcolsep
+                if l:amount <= 0
+                    return 0
+                endif
+            endif
+        endif
+        let l:index = a:xpos - l:amount
+        if l:index == 0
+            call setline(a:linenum, l:text[a:xpos : ])
+        else
+            call setline(a:linenum, l:text[ : l:index-1] . l:text[a:xpos : ])
+        endif
+        return -l:amount
     endif
-    let newxpos = Getshiftrightpos(myxpos,mylinenum)  " figure out from context where to shift to
-    if newxpos < 0
-        return
-    endif
-    let newtext = Doshiftright(newxpos,mycols[mycolnum][0],mytext) " do shift with text, or column num (let them write)
-    call setline(mylinenum,newtext)
-    call cursor(mylinenum,newxpos+1)
+    return 0
 endfunction
-
-function! Shiftcolleft()
-    let mylinenum = line(".")
-    let myxpos    = col(".")-1
-    let mytext    = getline(mylinenum)
-    let mycols    = Getcols(mytext)
-    let mycolnum  = Getnearestleftcol(myxpos,mycols)     " move to start of column we're in
-    if mycolnum < 0
-        return
-    endif
-    let newxpos = Getshiftleftpos(myxpos,mylinenum)  " figure out from context where to shift to
-    if newxpos < 0
-        return
-    endif
-    let newtext = Doshiftleft(newxpos,mycols[mycolnum][0],mytext) " do shift with text, or column num (let them write)
-    call setline(mylinenum,newtext)
-    call cursor(mylinenum,newxpos+1)
-endfunction
-
-
-function! Aligncol()
-    let mylinenum = line(".")
-    if mylinenum <= 1
-        return
-    endif
-    let myxpos = col(".")-1
-    let mytext = getline(mylinenum)
-    let mycols = Getcols(mytext)
-    let mycolnum = Getnearestleftcol(myxpos,mycols)
-    let mycoloffset = myxpos - mycols[mycolnum][0]
-    let matchcols = Getcols(getline(mylinenum-1))
-    let newtext = Trymatchto(mytext,matchcols)
-    let mycols = Getcols(newtext)
-    
-    call setline(mylinenum,newtext)
-    call cursor(mylinenum,mycols[mycolnum][0] + mycoloffset + 1)
-endfunction
-
-
-
-
-
-
-" =============================================
-" Insert Mode Commands (column manipulation)
-" =============================================
-
-
-function! Tabcolright()
-    let mylinenum = line(".")
-    let myxpos    = col(".")-1
-    let mytext    = getline(mylinenum)
-    let newxpos = Getshiftrightpos(myxpos,mylinenum)  " figure out from context where to shift to
-    if newxpos < 0
-        return ""
-    endif
-    let newtext = Doshiftright(newxpos,myxpos,mytext) " do shift with text, or column num (let them write)
-    call setline(mylinenum,newtext)
-    call cursor(mylinenum,newxpos+1)
-    return ""
-endfunction
-
-   
-
 
 
