@@ -22,7 +22,7 @@
 " the minimum number of spaces separating columns
 let g:smartcolsep = 2
 
-" when aligning, allow skipping this many rows (like commented or blank rows)
+" when aligning, allow skipping this many rows
 let g:smartcolskip = 1
 
 
